@@ -1,0 +1,1114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="46">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>901</ID>
+      <Description>"1. 创建表格：手动加载游戏进程"</Description>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not Userdata then Userdata = {} end
+Userdata.ids = {901, 902, 903, 904, 905, 906, 907, 908, 909}
+if AddressList.Count &gt; #Userdata.ids then return end
+
+local line = string.rep("· ", 150)
+local records = {
+	{Color = 0xDDDDDD, Description = line, ID = 1},
+	{Color = 0x808080, Description = "填写游戏名称等相关信息", ID = 100},
+	{Color = 0x0000FF, Description = "设置说明", Type = 11, Script = 909},
+	{Color = 0x808080, Description = "游戏信息", ID = 200, ParentID = 100},
+	{Color = 0x808080, Description = "中文名称: "},
+	{Color = 0x808080, Description = "英文名称: "},
+	{Color = 0x808080, Description = "平台名称: "},
+	{Color = 0x808080, Description = "最新版本: "},
+	{Color = 0x808080, Description = "脚本设置", ID = 300, ParentID = 100},
+	{Color = 0x808080, Description = "程序文件: "},
+	{Color = 0x808080, Description = "激活记录: "},
+	{Color = 0x808080, Description = "计时间隔: "},
+	{Color = 0x808080, Description = "核心模块: "},
+	{Color = 0x808080, Description = "稳定时长: "},
+	{Color = 0x808080, Description = "自动加载: "},
+	{Color = 0x808080, Description = "退出监测: "},
+	{Color = 0x808080, Description = "调试模式: "},
+	{Color = 0xDDDDDD, Description = line, ID = 2},
+	{Color = 0x303030, Description = "游戏状态", ID = 400},
+	{Color = 0x303030, Description = "更多功能", ID = 500, Rename = true},
+	{Color = 0x303030, Description = "重新加载", Type = 11, CopyName = true, Script = 904},
+	{Color = 0x303030, Description = "精简界面", Type = 11, CopyName = true, Script = 905},
+	{Color = 0x303030, Description = "显示RID", Type = 11, CopyName = true, Script = 906},
+	{Color = 0x303030, Description = "显示子项", Type = 11, CopyName = true, Script = 907},
+	{Color = 0x303030, Description = "模块信息", Type = 11, CopyName = true, Script = 908},
+	{Color = 0xDDDDDD, Description = line, ID = 3},
+}
+
+local childDescriptions,thisID,parentID = {},0,0
+-- 收集需要复制的描述
+for _, data in ipairs(records) do
+	if data.CopyName then table.insert(childDescriptions, data.Description) end
+end
+-- 生成子描述文本
+local childDescriptionText = string.format("[ %s ]", table.concat(childDescriptions, " | "))
+-- 创建内存记录
+Userdata.createRecords = {}
+for i, data in ipairs(records) do
+	if data.ID then thisID,parentID = data.ID,data.ID end
+
+	local record = AddressList.createMemoryRecord()
+	record.ID = data.ID or thisID
+	record.Type = data.Type
+	record.Color = data.Color
+	record.Description = data.Description
+	record.IsGroupHeader = not data.Type
+
+	local parent = data.ParentID or parentID
+	record.Parent = AddressList.getMemoryRecordByID(parent)
+
+	if data.Script then
+		local assembler = AddressList.getMemoryRecordByID(data.Script)
+		record.Script = assembler and assembler.Script or (type(data.Script) == "string" and data.Script)
+	end
+
+	if data.Rename then
+		record.Description = childDescriptionText
+	end
+
+	Userdata.createRecords[i] = record
+	thisID = thisID + 1
+end
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+stopMonitoring()
+-- 从最大索引反向遍历到 0，覆盖两个原循环的所有范围
+for i = AddressList.Count-1, #Userdata.ids, -1 do AddressList.getMemoryRecord(i).destroy() end
+{$asm}
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>902</ID>
+      <Description>"2. 重置信息：获取游戏信息并初始化配置"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not AddressList.getMemoryRecordByID(100) then prints("错误: 未找到关键内存记录(ID:100)") return end
+if getOpenedProcessID() == 0 then
+	prints("请打开游戏进程")
+	getMainForm().MenuItem8.doClick()
+	if getOpenedProcessID() == 0 then return end
+end
+
+-- 合并描述信息
+if not originalDescriptions then originalDescriptions = {} end
+function combineDescription(id, value)
+	local record = AddressList.getMemoryRecordByID(id)
+	if not record then return end
+	if not originalDescriptions[id] then originalDescriptions[id] = record.Description end
+	record.setDescription(originalDescriptions[id] .. value)
+end
+
+-- 重置描述信息
+function resetDescription()
+	for id, description in pairs(originalDescriptions) do
+		local record = AddressList.getMemoryRecordByID(id)
+		if record then record.setDescription(description) end
+	end
+	originalDescriptions = {}
+end
+
+-- 提取":"后面的内容
+function extractDesc(id)
+	local record = AddressList.getMemoryRecordByID(id)
+	if not record then return end
+
+	local result = record.Description:match(":%s*(.-)%s*$")
+	return result ~= "" and (tonumber(result) or result)
+end
+
+local chinese = extractDesc(201) or "Unknown"
+local english = extractDesc(202) or "Unknown"
+local station = extractDesc(203) or "Unknown"
+local version = extractDesc(204) or "Unknown"
+
+combineDescription(301, getProcesslist()[getOpenedProcessID()])
+combineDescription(302, "502")
+combineDescription(303, "1000")
+combineDescription(304, enumModules()[#enumModules()].Name)
+combineDescription(305, "10000")
+combineDescription(306, "1")
+combineDescription(307, "1")
+combineDescription(308, "2")
+
+AddressList.getMemoryRecordByID(100).setDescription(string.format("%s.%s.%s.%s [%s]", chinese, english, station, version, os.date("%Y-%m-%d")))
+startMonitoring()
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if getOpenedProcessID() &gt; 0 then stopMonitoring() end
+-- if resetDescription then resetDescription() end
+{$asm}
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>903</ID>
+      <Description>"3. 导出表格"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not AddressList.getMemoryRecordByID(100) then prints("错误: 未找到关键内存记录(ID:100)") return end
+if getOpenedProcessID() == 0 then prints("请打开游戏进程") return end
+
+-- 设置不保存的记录
+local function setRecordsDontSave(enable)
+	for _, id in ipairs(Userdata.ids) do AddressList.getMemoryRecordByID(id).DontSave = enable end
+end
+-- 设置记录选项
+local function setRecordsOptions(enable)
+	for _, record in ipairs(Userdata.createRecords) do
+		record.Options = enable and (record.ID == 100 and "[moAllowManualCollapseAndExpand,moAlwaysHideChildren]" or "[moHideChildren]") or nil
+	end
+end
+
+-- 停止计时器
+stopMonitoring()
+-- 导出前准备工作：设置不保存记录，设置记录选项，将DEBUG_MODE设置为0
+setRecordsOptions(true)
+setRecordsDontSave(true)
+combineDescription(308, "0")
+
+-- 导出表格
+local fileName = AddressList.getMemoryRecordByID(100).Description .. ".CT"
+saveTable(fileName)
+prints("已保存为: " .. fileName)
+
+-- 导出后恢复工作：将DEBUG_MODE设置为2，恢复记录选项，恢复保存记录
+setRecordsOptions(false)
+setRecordsDontSave(false)
+combineDescription(308, "2")
+{$asm}
+
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>904</ID>
+      <Description>"4. 辅助函数：重新加载"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+memrec.OnActivate = function(rec, before, state)
+    -- if before then
+        prints("ID: %d, Description: %s, Before: %s, State: %s", rec.ID, rec.Description, tostring(before), tostring(state))
+        -- return false
+    -- else
+        rec.Active = false
+    -- end
+end
+{$asm}
+
+[DISABLE]
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>905</ID>
+      <Description>"5. 辅助函数：精简界面"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if Global.menuExists then Global.compactEnabled = true Global.compactMenu.Caption = "完整界面" end
+control_setVisible(wincontrol_getControl(MainForm, 0), false)
+control_setVisible(wincontrol_getControl(MainForm, 3), false)
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if Global.menuExists then Global.compactEnabled = false Global.compactMenu.Caption = "紧凑界面" end
+control_setVisible(wincontrol_getControl(MainForm, 0), true)
+control_setVisible(wincontrol_getControl(MainForm, 3), true)
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>906</ID>
+      <Description>"6. 辅助函数：显示RID"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not Descriptions then Descriptions = {} end
+
+function toggleRecordIDDisplay(enable)
+	for i = 0, AddressList.Count-1 do
+		local record = AddressList.getMemoryRecord(i)
+		local description = string.format("[%d] %s", record.ID, record.Description)
+		Descriptions[record.ID] = enable and record.Description or Descriptions[record.ID]
+		record.Description = enable and description or Descriptions[record.ID]
+	end
+
+	local statusText = enable and "启用" or "禁用"
+	prints("切换记录ID显示: " .. statusText)
+end
+toggleRecordIDDisplay(true)
+{$asm}
+
+[DISABLE]
+{$lua}
+if not syntaxcheck then toggleRecordIDDisplay(false) end
+{$asm}
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>907</ID>
+      <Description>"7. 辅助函数：显示子项"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not RecordOptions then RecordOptions = {} end
+
+function toggleSubItemDisplay(enable)
+	for i = 0, AddressList.Count-1 do
+		local record = AddressList.getMemoryRecord(i)
+		RecordOptions[record.ID] = RecordOptions[record.ID] or record.Options
+		record.Options = enable and "" or RecordOptions[record.ID]
+	end
+
+	local statusText = enable and "显示" or "隐藏"
+	prints("设置子项显示: " .. statusText)
+end
+toggleSubItemDisplay(true)
+{$asm}
+
+[DISABLE]
+{$lua}
+if not syntaxcheck then toggleSubItemDisplay(false) end
+{$asm}
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>908</ID>
+      <Description>"8. 辅助函数：模块列表"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not Userdata then Userdata = {} end
+if not Userdata.moduleList then Userdata.moduleList = createForm(false) end
+-- 大小格式化
+function formatBytes(bytes)
+	local units = {"B", "KB", "MB", "GB", "TB"}
+	local unitIndex = 1
+	while bytes &gt;= 1024 and unitIndex &lt; #units do
+		bytes = bytes / 1024
+		unitIndex = unitIndex + 1
+	end
+	return string.format(unitIndex &gt; 1 and "%.2f %s" or "%.0f %s", bytes, units[unitIndex])
+end
+
+-- 列出所有模块信息
+function listAllModules()
+	local pid = getOpenedProcessID()
+	if pid == 0 then prints("未打开任何进程") return end
+
+	local processName = getProcesslist()[pid]
+	local modules = enumModules(pid)
+	if not modules or #modules == 0 then prints("未找到任何模块") return end
+
+	prints("模块列表 (进程: " .. processName .. "):")
+	prints("序号 - 模块名 (大小) - 基地址")
+	prints("--------------------------------------------------------------")
+	local totalSize = 0
+	local largestModule = {index = 0, name = "未知", size = 0}
+	for i, module in ipairs(modules) do
+		local name = module.Name or "未知"
+		local size = module.Size or 0
+		local address = module.Address or 0
+		-- 格式化输出
+		local sizeStr = formatBytes(size)
+		local addressStr = string.format("0x%X", address)
+		prints(string.format("%03d - %s (%s) - %s", i, name, sizeStr, addressStr))
+		-- 更新总大小和最大模块
+		totalSize = totalSize + size
+		if size &gt; largestModule.size then largestModule = {index = i, name = name, size = size} end
+	end
+	prints("--------------------------------------------------------------")
+	prints("总共 %d 个模块，总大小: %s", #modules, formatBytes(totalSize))
+	prints("最大模块: %s (大小: %s)", largestModule.name, formatBytes(largestModule.size))
+end
+
+-- 更详细的模块信息函数
+function detailedModuleInfo()
+    local pid = getOpenedProcessID()
+    if pid == 0 then return {} end
+
+    local processName = getProcesslist()[pid]
+    local modules = enumModules(pid)
+    local moduleInfo = {}
+
+    for i, module in ipairs(modules) do
+        local path = module.PathToFile or ""
+        local directory = extractFilePath(path)
+
+        table.insert(moduleInfo, {
+            index = i,
+            name = module.Name or "未知",
+            path = path,
+            directory = directory,
+            size = module.Size or 0,
+            address = module.Address or 0,
+            sizeFormatted = formatBytes(module.Size or 0)
+        })
+    end
+    return moduleInfo
+end
+
+
+-- 显示模块信息的GUI版本
+function showModulesInGUI()
+    local moduleInfo = detailedModuleInfo()
+    if #moduleInfo == 0 then showMessage("未找到任何模块") return end
+
+    -- 创建窗体显示模块信息
+    local form = Userdata.moduleList
+    if form.Created and not form.Visible then form.show() return end
+    if not form.customPosition then
+        form.customPosition = true
+        form.Width = 900
+        form.Height = getWorkAreaHeight()-100
+        form.Left = 10
+        form.Top = 10
+    end
+    form.Caption = "模块列表 - " .. tostring(getProcesslist()[getOpenedProcessID()] or "未知进程")
+    form.BorderIcons = "[biSystemMenu,biMinimize,biMaximize]"
+    form.BorderStyle = bsSizeable
+    form.OnClose = function()
+        local record = nil
+        record = AddressList.getMemoryRecordByID(908)
+        if record then record.Active = false end
+        record = AddressList.getMemoryRecordByID(505)
+        if record then record.Active = false end
+        form.Visible = false
+    end
+    form.show()
+
+    -- 创建主面板
+    local mainPanel = createPanel(form)
+    mainPanel.Align = alClient
+    mainPanel.BevelOuter = bvNone
+
+    -- 创建列表视图
+    local listview = createListView(mainPanel)
+    listview.Align = alClient
+    listview.ViewStyle = vsReport
+    listview.ReadOnly = true
+    listview.RowSelect = true
+    listview.GridLines = true
+
+    -- 添加列（新布局：序号、模块名、所在目录、大小、基地址）
+    listview.Columns.add()
+    listview.Columns[0].Caption = "序号"
+    listview.Columns[0].Width = 60
+
+    listview.Columns.add()
+    listview.Columns[1].Caption = "模块名"
+    listview.Columns[1].Width = 200
+
+    listview.Columns.add()
+    listview.Columns[2].Caption = "所在目录"
+    listview.Columns[2].Width = 300
+
+    listview.Columns.add()
+    listview.Columns[3].Caption = "大小"
+    listview.Columns[3].Width = 120
+    listview.Columns[3].Alignment = 1
+
+    listview.Columns.add()
+    listview.Columns[4].Caption = "基地址"
+    listview.Columns[4].Width = 180
+
+
+    -- 重新获取包含路径信息的模块数据
+    moduleInfo = detailedModuleInfo()
+
+    -- 添加数据
+    for i, info in ipairs(moduleInfo) do
+        local item = listview.Items.add()
+        item.Caption = tostring(info.index)
+        item.SubItems.add(info.name)
+        item.SubItems.add(info.directory)
+        item.SubItems.add(info.sizeFormatted)
+        item.SubItems.add(string.format("0x%X", info.address))
+    end
+
+    -- 右键菜单功能
+    local menuItems = {
+        {caption = "复制模块名称", colIndex = 0},
+        {caption = "复制目录路径", colIndex = 1},
+    }
+    listview.PopupMenu = createPopupMenu(listview)
+    for _, item in ipairs(menuItems) do
+        local menuItem = createMenuItem(listview.PopupMenu)
+        menuItem.Caption = item.caption
+        menuItem.OnClick = function()
+            if not listview.Selected then return end
+            local copyItem = listview.Selected.SubItems[item.colIndex]
+            writeToClipboard(copyItem)
+            showMessage("已" .. item.caption .. ": " .. copyItem)
+        end
+        listview.PopupMenu.Items.add(menuItem)
+    end
+
+    -- 双击复制模块名称
+    listview.OnDblClick = function(sender)
+        if listview.Selected then
+            local moduleName = listview.Selected.SubItems[0]
+            writeToClipboard(moduleName)
+            showMessage("已复制模块名称: " .. moduleName)
+        end
+    end
+
+    -- 创建底部面板
+    local bottomPanel = createPanel(mainPanel)
+    bottomPanel.Align = alBottom
+    bottomPanel.Height = 52
+    bottomPanel.BevelOuter = bvNone
+
+    -- 计算总大小
+    local totalSize = 0
+    for _, info in ipairs(moduleInfo) do totalSize = totalSize + info.size end
+
+    -- 统计信息标签
+    local statLabel = createLabel(bottomPanel)
+    statLabel.Caption = string.format("总计: %d 个模块, 总大小: %s", #moduleInfo, formatBytes(totalSize))
+    statLabel.Align = alNone
+    statLabel.Width = 300
+    statLabel.Layout = tlCenter
+    statLabel.Top = 10
+    statLabel.Left = 10
+
+    -- 按钮面板
+    local buttonPanel = createPanel(bottomPanel)
+    buttonPanel.Align = alRight
+    buttonPanel.Width = 335
+    buttonPanel.BevelOuter = bvNone
+
+    -- 控制台显示按钮
+    local consoleBtn = createButton(buttonPanel)
+    consoleBtn.Caption = "控制台输出"
+    consoleBtn.Left = 10
+    consoleBtn.Top = 8
+    consoleBtn.Width = 120
+    consoleBtn.Height = 34
+    consoleBtn.OnClick = listAllModules
+
+    -- 刷新按钮
+    local refreshBtn = createButton(buttonPanel)
+    refreshBtn.Caption = "刷新"
+    refreshBtn.Left = 135
+    refreshBtn.Top = 8
+    refreshBtn.Width = 90
+    refreshBtn.Height = 34
+    refreshBtn.OnClick = function()
+        -- 刷新数据
+        local newModuleInfo = detailedModuleInfo()
+        -- 清空列表
+        listview.Items.clear()
+        -- 重新填充数据
+        for i, info in ipairs(newModuleInfo) do
+            local item = listview.Items.add()
+            item.Caption = tostring(info.index)
+            item.SubItems.add(info.name)
+            item.SubItems.add(info.directory)
+            item.SubItems.add(info.sizeFormatted)
+            item.SubItems.add(string.format("0x%X", info.address))
+        end
+        -- 更新统计信息
+        local newTotalSize = 0
+        for _, info in ipairs(newModuleInfo) do newTotalSize = newTotalSize + info.size end
+        statLabel.Caption = string.format("总计: %d 个模块, 总大小: %s", #newModuleInfo, formatBytes(newTotalSize))
+        moduleInfo = newModuleInfo
+    end
+
+    -- 关闭按钮
+    local closeBtn = createButton(buttonPanel)
+    closeBtn.Caption = "关闭"
+    closeBtn.Left = 230
+    closeBtn.Top = 8
+    closeBtn.Width = 90
+    closeBtn.Height = 34
+    closeBtn.OnClick = function() form.close() end
+
+    -- 添加排序功能
+    local lastSortedColumn = -1
+    local ascending = true
+    listview.OnColumnClick = function(sender, column)
+        local colIndex = column.Index
+        -- 切换排序方向
+        if lastSortedColumn == colIndex then
+            ascending = not ascending
+        else
+            ascending = true
+            lastSortedColumn = colIndex
+        end
+
+        -- 根据列索引排序
+        table.sort(moduleInfo, function(a, b)
+            local valA, valB
+
+            if colIndex == 0 then
+                -- 序号列
+                valA = a.index
+                valB = b.index
+            elseif colIndex == 1 then
+                -- 模块名列
+                valA = a.name:lower()
+                valB = b.name:lower()
+            elseif colIndex == 2 then
+                -- 目录列
+                valA = a.directory:lower()
+                valB = b.directory:lower()
+            elseif colIndex == 3 then
+                -- 大小列 - 使用原始字节数进行排序
+                valA = a.size
+                valB = b.size
+            elseif colIndex == 4 then
+                -- 基地址列
+                valA = a.address
+                valB = b.address
+            else
+                return ascending
+            end
+
+            if ascending then
+                if type(valA) == "string" then
+                    return valA &lt; valB
+                else
+                    return valA &lt; valB
+                end
+            else
+                if type(valA) == "string" then
+                    return valA &gt; valB
+                else
+                    return valA &gt; valB
+                end
+            end
+        end)
+
+        -- 更新列表显示
+        listview.Items.clear()
+        for i, info in ipairs(moduleInfo) do
+            local item = listview.Items.add()
+            item.Caption = tostring(info.index)
+            item.SubItems.add(info.name)
+            item.SubItems.add(info.directory)
+            item.SubItems.add(info.sizeFormatted)
+            item.SubItems.add(string.format("0x%X", info.address))
+        end
+
+        -- 更新列标题显示排序状态
+        for i = 0, listview.Columns.Count - 1 do
+            if i == colIndex then
+                listview.Columns[i].Caption = listview.Columns[i].Caption:gsub(" ↑$", ""):gsub(" ↓$", "")
+                listview.Columns[i].Caption = listview.Columns[i].Caption .. (ascending and " ↑" or " ↓")
+            else
+                listview.Columns[i].Caption = listview.Columns[i].Caption:gsub(" ↑$", ""):gsub(" ↓$", "")
+            end
+        end
+    end
+    form.Created = true
+end
+
+
+-- 在控制台打印特定模块信息（如midimap.dll）
+function findSpecificModule(moduleName)
+	local pid = getOpenedProcessID()
+	if pid == 0 then prints("未打开任何进程") return nil end
+
+	local processName = getProcesslist()[pid]
+	local modules = enumModules(pid)
+	moduleName = moduleName:lower()
+
+	for _, module in ipairs(modules) do
+		local currentName = module.Name:lower()
+		if currentName == moduleName then
+			prints("找到模块: " .. module.Name)
+			prints("大小: " .. module.Size .. " 字节 (" .. math.floor(module.Size / 1024) .. " KB)")
+			prints("基地址: 0x" .. string.format("%X", module.Address))
+			return module
+		end
+	end
+
+	prints("未找到模块: " .. moduleName)
+	return nil
+end
+
+-- 使用示例
+-- listAllModules()  -- 在控制台列出所有模块
+-- showModulesInGUI() -- 在GUI中显示模块信息
+-- findSpecificModule("midimap.dll") -- 查找特定模块
+
+showModulesInGUI()
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if Userdata and Userdata.moduleList then Userdata.moduleList.Visible = false end
+{$asm}
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>909</ID>
+      <Description>"9. 辅助函数：设置说明"</Description>
+      <Options moHideChildren="1"/>
+      <LastState/>
+      <Color>303030</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+-- getMainForm() -- 主界面
+-- getMemoryViewForm() -- 内存界面
+
+-- getMainForm().CommentButton.doClick() -- CE右下角附加注释按钮
+-- GetLuaEngine().MenuItem5.doClick() -- LUA调试窗口清屏
+-- getMemoryViewForm().miLuaEngine.doClick()
+-- getMainForm().Width = 900 -- 设置CE窗口宽度
+-- getMainForm().Height = getWorkAreaHeight()-100
+-- getMainForm().Top = 10
+-- getMainForm().Left = getWorkAreaWidth()-930
+-- getMainForm().btnMemoryView.doClick()  -- 模拟点击内存查看按钮
+-- getMemoryViewForm().miUserdefinedSymbols.doClick() -- 用户自定义的符号表
+
+getLuaEngine().show()
+{$asm}
+
+[DISABLE]
+{$lua}
+if not syntaxcheck then getLuaEngine().hide() end
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+  <LuaScript>if syntaxcheck then return end
+if not Global then Global = {} end
+if not Config then Config = {} end
+
+-- 辅助函数: 自定义打印函数（带行号和函数信息）
+function prints(...)
+	local DEBUG_MODE = Config.debugMode or 2
+	if DEBUG_MODE == 0 then return end
+
+	-- 处理各种参数情况
+	local content, argCount = nil, select("#", ...)
+	if argCount == 0 then content = "nil" end
+	if argCount == 1 then content = ... == nil and "nil" or tostring(...) end
+	if argCount &gt;= 2 then content = string.format(...) end
+
+	if DEBUG_MODE == 1 then print(content) return end
+
+	if DEBUG_MODE == 2 then
+		local debugInfo = debug.getinfo(2, "Sln")
+		local linecount = debugInfo.currentline
+		local funcname = debugInfo.name and " = " .. debugInfo.name .. " =" or ""
+		printf("[%04d]%s %s", linecount, funcname, content)
+	end
+end
+
+-- 辅助函数：异步延迟执行函数
+function delay(delayTime, func)
+	local timer = createTimer()
+	timer.Interval = delayTime
+	timer.OnTimer = function(sender) sender.destroy() func() end
+end
+
+-- 辅助函数: 大小格式化
+function formatSize(bytes)
+	local units = {"B", "KB", "MB", "GB", "TB"}
+    if bytes == 0 then return "0 B" end
+
+	local index = math.min(math.floor(math.log(bytes)/math.log(1024)), #units-1)
+    local value = bytes/(1024^index)
+	return string.format(index &gt; 0 and "%.2f %s" or "%.0f %s", value, units[index+1])
+end
+
+-- 辅助函数: 提取":"后面的内容返回指定类型
+function extractDescAs(id, targetType)
+	local record = AddressList.getMemoryRecordByID(id)
+	if not record then return end
+
+	local result = record.Description:match(":%s*(.-)%s*$")
+	if not result or result == "" then return end
+
+	-- 根据目标类型返回不同结果
+	if targetType == "N" then return tonumber(result) end
+	if targetType == "B" then return result == "1" end
+	if targetType == "T" then
+		local tableResult = {}
+		if result:find(",") then
+			for item in result:gmatch("[^,]+") do
+				local trimmed = item:match("^%s*(.-)%s*$")
+				table.insert(tableResult, tonumber(trimmed) or trimmed)
+			end
+		else
+			local trimmed = result:match("^%s*(.-)%s*$")
+			if trimmed ~= "" then tableResult = {tonumber(trimmed) or trimmed} end
+		end
+		return tableResult
+	end
+	return result
+end
+
+-- 辅助函数: 读取子记录
+function readSubRecords(id)
+	local record = AddressList.getMemoryRecordByID(id)
+	if not record or record.Count == 0 then return end
+	for i = 1, record.Count do prints("[ %s ] %s", record.Description, record.Child[i-1].Description) end
+end
+
+-- 辅助函数：通过名称查找窗体
+function findFormByName(name)
+	if Global[name] then return Global[name] end
+    for i = 0, getFormCount() - 1 do
+        local form = getForm(i)
+        if form and form.Name == name then Global[name] = form return form end
+    end
+    return nil
+end
+
+-- 添加额外菜单
+function addExtraMenu()
+	if Global.menuExists then return end
+	-- 添加紧凑界面菜单
+	local compactItem = createMenuItem(getMainForm().Menu.Items)
+	compactItem.Caption = "紧凑界面"
+	compactItem.OnClick = function(sender)
+		sender.Caption = Global.compactEnabled and "紧凑界面" or "完整界面"
+		control_setVisible(wincontrol_getControl(MainForm, 0), Global.compactEnabled)
+		control_setVisible(wincontrol_getControl(MainForm, 3), Global.compactEnabled)
+		-- 切换CompactUI状态
+		Global.compactEnabled = not Global.compactEnabled
+
+		local record = AddressList.getMemoryRecordByID(502)
+		if record then record.Active = Global.compactEnabled end
+	end
+	Global.compactMenu = compactItem
+	getMainForm().Menu.Items.add(compactItem)
+
+	-- 添加符号表菜单
+	local symbolItem = createMenuItem(getMainForm().Menu.Items)
+	symbolItem.Caption = "符号表"
+	symbolItem.OnClick = function(sender)
+		if Global.symbolMenu then Global.symbolMenu.Visible = not Global.symbolMenu.Visible return end
+
+		getMemoryViewForm().miUserdefinedSymbols.doClick()
+		Global.symbolMenu = findFormByName("frmSymbolhandler")
+	end
+	getMainForm().Menu.Items.add(symbolItem)
+
+	Global.menuExists = true
+end
+
+-- 修改签名标签
+function modifySignedLabel()
+	Global.lblSigned = getMainForm().lblSigned
+	if not Global.lblSigned then return end
+
+	local lblSigned = Global.lblSigned
+	lblSigned.Caption = "im.ponchine@gmail.com (L-Continue)"
+	lblSigned.Font.Color = 0x808080
+	lblSigned.Visible = true
+end
+
+-- 激活指定记录
+function activateRecords()
+	if #Config.activeRecords == 0 or Global.activated then return end
+	for _, recordID in ipairs(Config.activeRecords) do
+		local record = AddressList.getMemoryRecordByID(recordID)
+		if record then record.Active = true end
+	end
+	Global.activated = true
+end
+
+-- 初始化函数 - 清除计时器和重置状态
+function initializeMonitor()
+	-- 读取配置信息
+	Config.processName = extractDescAs(301, "S")
+	Config.activeRecords = extractDescAs(302, "T") or {}
+	Config.checkInterval = extractDescAs(303, "N") or 1000
+	Config.checkRequired = extractDescAs(304, "T") or {}
+	Config.moduleStableTime = Global.stableTime or extractDescAs(305, "N") or 10000
+	Config.enableAutoloading = extractDescAs(306, "B")
+	Config.enableExitrestart = extractDescAs(307, "B")
+	Config.debugMode = extractDescAs(308, "N") or 2
+	if not Config.processName then prints("错误: 未配置进程名称") return end
+
+	prints("=== 读取配置信息 ===")
+	readSubRecords(200)
+	readSubRecords(300)
+
+	-- 重置状态变量
+	prints("=== 全局变量重置 ===")
+	if Global.timer then Global.timer.destroy() Global.timer = nil end
+	prints("[ 初始化 ] 计时器: %s", Global.timer and "未初始化" or "已销毁")
+	Global.processID = 0
+	prints("[ 初始化 ] 进程ID: %d", Global.processID)
+	Global.attemptNumb = 0
+	prints("[ 初始化 ] 尝试次数: %d", Global.attemptNumb)
+	Global.isMonitoring = false
+	prints("[ 初始化 ] 是否监控中: %s", tostring(Global.isMonitoring))
+	Global.processLoaded = false
+	prints("[ 初始化 ] 是否加载进程: %s", tostring(Global.processLoaded))
+	Global.totalStartTime = getTickCount()
+	prints("[ 初始化 ] 运行开始时间: %d", Global.totalStartTime)
+	Global.checkStartTime = 0
+	prints("[ 初始化 ] 检查开始时间: %s", tostring(Global.checkStartTime))
+	Global.checkSpendTime = 0
+	prints("[ 初始化 ] 模块持续时间: %s", tostring(Global.checkSpendTime))
+	Global.lastModuleNumb = 0
+	prints("[ 初始化 ] 最后模块数量: %d", Global.lastModuleNumb)
+	Global.lastModuleName = ""
+	prints("[ 初始化 ] 最后模块名称: %s", Global.lastModuleName or "未记录")
+	Global.loadedModules = {}
+	prints("[ 初始化 ] 已加载模块: %s", tostring(Global.loadedModules))
+	Global.unloadModules = {}
+	prints("[ 初始化 ] 未加载模块: %s", tostring(Global.unloadModules))
+end
+
+-- 监控进程状态
+function monitorStatus(message, color)
+	color = color or 0x0000FF
+	prints("[ 状态 ] %s", message)
+
+	local record = AddressList.getMemoryRecordByID(400)
+	if not record then return end
+
+	local elapsedTime = getTickCount() - Global.totalStartTime
+	local minute = math.floor(elapsedTime / 60000)
+	local second = math.floor(elapsedTime / 1000) % 60
+	record.Description = string.format("[ %02d:%02d ] %s", minute, second, message)
+	record.Color = color
+end
+
+-- 进程监控函数
+function monitorProcess()
+	if not Global.isMonitoring then return end
+	-- 计数器
+	Global.attemptNumb = Global.attemptNumb + 1
+
+	-- 阶段1: 进程加载检查
+	if not Global.processLoaded then
+		-- 获取进程ID
+		Global.processID = getProcessIDFromProcessName(Config.processName)
+		if not Global.processID then monitorStatus(string.format("等待主程序【%s】", Config.processName), 0x0000FF) return end
+
+		-- 尝试附加到进程
+		if openProcess(Config.processName) then
+			Global.processLoaded = true
+			Global.totalStartTime = getTickCount()
+			Global.checkStartTime = getTickCount()
+			local modules = enumModules(Global.processID)
+			Global.lastModuleNumb = #modules
+			Global.lastModuleName = modules[#modules] and modules[#modules].Name or ""
+			monitorStatus("主程序已加载，检查模块中", 0x0080FF)
+		else
+			monitorStatus(string.format("游戏加载失败，重试中【%s】", Config.processName), 0x0000FF)
+		end
+		return
+	end
+
+	-- 阶段2: 模块稳定性检查
+	local modules = enumModules(Global.processID)
+	local currentModuleNumb = #modules
+
+	-- 检查模块数量是否有效
+	if currentModuleNumb == 0 then
+		Global.totalStartTime = getTickCount()
+		Global.processLoaded = false
+		monitorStatus("游戏可能退出，重新加载", 0x0000FF)
+		return
+	end
+
+	-- 检查模块数量是否变化
+	local currentModuleName = modules[#modules].Name
+	if currentModuleNumb ~= Global.lastModuleNumb or currentModuleName ~= Global.lastModuleName then
+		Global.checkStartTime = getTickCount()
+		Global.lastModuleNumb = currentModuleNumb
+		Global.lastModuleName = currentModuleName
+	end
+
+	-- 如果有配置关键模块，检查这些模块是否已加载
+	if #Config.checkRequired &gt; 0 then
+		local allLoaded = true
+		local loadedMap = {}
+		for _, module in ipairs(modules) do loadedMap[module.Name] = true end
+
+		Global.loadedModules = {}
+		Global.unloadModules = {}
+
+		-- 检查每个关键模块是否已加载
+		for _, reqModule in ipairs(Config.checkRequired) do
+			if loadedMap[reqModule] then table.insert(Global.loadedModules, reqModule)
+			else allLoaded = false table.insert(Global.unloadModules, reqModule) end
+		end
+		if allLoaded and not Config.enableExitrestart then stopMonitoring() end
+	else
+		-- 没有配置关键模块，使用稳定时长检查
+		Global.checkSpendTime = getTickCount() - Global.checkStartTime
+		if Global.checkSpendTime &gt;= Config.moduleStableTime and not Config.enableExitrestart then stopMonitoring() end
+	end
+
+	-- 模块稳定性检查（状态信息）
+	local isCompleted1 = #Config.checkRequired == 0 and Global.checkSpendTime &gt;= Config.moduleStableTime -- 无关键模块时：时间达标
+	local isCompleted2 = #Config.checkRequired &gt; 0 and #Global.loadedModules &gt;= #Config.checkRequired -- 有关键模块时：已加载数量达标
+	local isCompleted = isCompleted1 or isCompleted2
+	-- 动态生成“模块信息”部分（根据是否完成/是否有关键模块调整内容）
+	local moduleInfo = ""
+	if not isCompleted then
+		-- 未完成时：显示模块数量、最后模块名、进度（时间/关键模块）
+		local baseInfo = string.format("模块: %d个, 最后: %s", Global.lastModuleNumb, Global.lastModuleName)
+		local progress1 = string.format(" (%.1f/%.1f)", Global.checkSpendTime / 1000, Config.moduleStableTime / 1000)
+		local progress2 = string.format(", 关键模块: %d/%d", #Global.loadedModules, #Config.checkRequired)
+		moduleInfo = #Config.checkRequired == 0 and baseInfo .. progress1 or baseInfo .. progress2
+	else
+		-- 完成时的信息
+		activateRecords()
+		moduleInfo = string.format("模块: %d个, 游戏加载完成! %s退出监测.", Global.lastModuleNumb, Config.enableExitrestart and "已开启" or "未开启")
+	end
+	monitorStatus(moduleInfo, isCompleted and 0x008000 or 0x0080FF)
+end
+
+-- 启动监控
+function startMonitoring()
+	if Global.isMonitoring then return end
+
+	-- 检查关键内存记录是否存在
+	local record = AddressList.getMemoryRecordByID(100)
+	if not record then prints("错误: 未找到关键内存记录(ID:100)") return end
+
+	-- 初始化监控数据
+	initializeMonitor()
+
+	-- 检查自动加载是否启用
+	if not Config.enableAutoloading then monitorStatus("自动加载已禁用", 0x808080) return end
+
+	prints("=== 启动自动加载 ===")
+	Global.isMonitoring = true
+	Global.timer = createTimer(nil, true)
+	Global.timer.Interval = Config.checkInterval
+	Global.timer.OnTimer = function()
+		local success, err = pcall(monitorProcess)
+		if not success then monitorStatus("监控错误: " .. err, 0xFF0000) end
+	end
+	monitorStatus("开始自动加载游戏")
+end
+
+-- 停止监控
+function stopMonitoring()
+	if not Global.isMonitoring then return end
+
+	Global.isMonitoring = false
+	Global.totalStartTime = getTickCount()
+	if Global.timer then Global.timer.destroy() Global.timer = nil end
+	monitorStatus("监控已停止", 0x808080)
+end
+
+-- 增强的符号清理函数
+function cleanupSymbols()
+	prints("开始彻底清理符号...")
+
+	-- 首先使用内置函数清理
+	deleteAllRegisteredSymbols()
+
+	-- 手动检查并清理残留符号
+	local symbols = enumRegisteredSymbols()
+	if symbols and #symbols &gt; 0 then
+		prints("发现 %d 个残留符号，正在手动清理...", #symbols)
+
+		-- 尝试逐个注销符号
+		for i, symbol in ipairs(symbols) do
+			if symbol.symbolname then
+				unregisterSymbol(symbol.symbolname)
+				prints("已注销符号: %s", tostring(symbol.symbolname))
+			end
+		end
+
+		-- 再次检查
+		symbols = enumRegisteredSymbols()
+		if symbols and #symbols &gt; 0 then
+			prints("警告: 仍有 %d 个符号无法清理", #symbols)
+		else
+			prints("符号清理完成")
+		end
+	else
+		prints("没有发现残留符号")
+	end
+end
+
+
+-- 重新加载游戏进程
+function reloadProcess()
+	-- if Global.isMonitoring then stopMonitoring() end
+	-- 禁用所有脚本
+	-- local disabled = 0
+	-- for i = 2, AddressList.Count - 1 do
+	--   local record = AddressList.getMemoryRecord(i)
+	--   if record.Active then record.Active = false disabled = disabled + 1 end
+	-- end
+	-- prints("总共禁用了 %d 个脚本", disabled)
+
+	-- cleanupSymbols()
+
+	-- Global.stableTime = 0
+	openProcess(Config.processName)
+	-- if Global.processLoaded then openProcess(Config.processName) end
+	-- startMonitoring()
+	-- Global.stableTime = nil
+end
+
+-- 添加额外菜单
+addExtraMenu()
+-- 执行监控
+startMonitoring()
+-- 延迟开启紧凑界面
+if Global.menuExists then delay(100, function() Global.compactMenu.doClick() end) end
+
+</LuaScript>
+</CheatTable>
