@@ -1,0 +1,23 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not Descriptions then Descriptions = {} end
+
+function toggleRecordIDDisplay(enable)
+	for i = 0, AddressList.Count-1 do
+		local record = AddressList.getMemoryRecord(i)
+		local description = string.format("[%d] %s", record.ID, record.Description)
+		Descriptions[record.ID] = enable and record.Description or Descriptions[record.ID]
+		record.Description = enable and description or Descriptions[record.ID]
+	end
+
+	local statusText = enable and "启用" or "禁用"
+	prints("切换记录ID显示: " .. statusText)
+end
+toggleRecordIDDisplay(true)
+{$asm}
+
+[DISABLE]
+{$lua}
+if not syntaxcheck then toggleRecordIDDisplay(false) end
+{$asm}

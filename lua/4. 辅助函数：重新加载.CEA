@@ -1,0 +1,14 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+memrec.OnActivate = function(rec, before, state)
+    -- if before then
+        prints("ID: %d, Description: %s, Before: %s, State: %s", rec.ID, rec.Description, tostring(before), tostring(state))
+        -- return false
+    -- else
+        rec.Active = false
+    -- end
+end
+{$asm}
+
+[DISABLE]

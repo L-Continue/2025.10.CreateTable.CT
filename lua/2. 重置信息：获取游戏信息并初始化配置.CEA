@@ -1,0 +1,61 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not AddressList.getMemoryRecordByID(100) then prints("错误: 未找到关键内存记录(ID:100)") return end
+if getOpenedProcessID() == 0 then
+	prints("请打开游戏进程")
+	getMainForm().MenuItem8.doClick()
+	if getOpenedProcessID() == 0 then return end
+end
+
+-- 合并描述信息
+if not originalDescriptions then originalDescriptions = {} end
+function combineDescription(id, value)
+	local record = AddressList.getMemoryRecordByID(id)
+	if not record then return end
+	if not originalDescriptions[id] then originalDescriptions[id] = record.Description end
+	record.setDescription(originalDescriptions[id] .. value)
+end
+
+-- 重置描述信息
+function resetDescription()
+	for id, description in pairs(originalDescriptions) do
+		local record = AddressList.getMemoryRecordByID(id)
+		if record then record.setDescription(description) end
+	end
+	originalDescriptions = {}
+end
+
+-- 提取":"后面的内容
+function extractDesc(id)
+	local record = AddressList.getMemoryRecordByID(id)
+	if not record then return end
+
+	local result = record.Description:match(":%s*(.-)%s*$")
+	return result ~= "" and (tonumber(result) or result)
+end
+
+local chinese = extractDesc(201) or "Unknown"
+local english = extractDesc(202) or "Unknown"
+local station = extractDesc(203) or "Unknown"
+local version = extractDesc(204) or "Unknown"
+
+combineDescription(301, getProcesslist()[getOpenedProcessID()])
+combineDescription(302, "502")
+combineDescription(303, "1000")
+combineDescription(304, enumModules()[#enumModules()].Name)
+combineDescription(305, "10000")
+combineDescription(306, "1")
+combineDescription(307, "1")
+combineDescription(308, "2")
+
+AddressList.getMemoryRecordByID(100).setDescription(string.format("%s.%s.%s.%s [%s]", chinese, english, station, version, os.date("%Y-%m-%d")))
+startMonitoring()
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if getOpenedProcessID() > 0 then stopMonitoring() end
+-- if resetDescription then resetDescription() end
+{$asm}

@@ -1,0 +1,36 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not AddressList.getMemoryRecordByID(100) then prints("错误: 未找到关键内存记录(ID:100)") return end
+if getOpenedProcessID() == 0 then prints("请打开游戏进程") return end
+
+-- 设置不保存的记录
+local function setRecordsDontSave(enable)
+	for _, id in ipairs(Userdata.ids) do AddressList.getMemoryRecordByID(id).DontSave = enable end
+end
+-- 设置记录选项
+local function setRecordsOptions(enable)
+	for _, record in ipairs(Userdata.createRecords) do
+		record.Options = enable and (record.ID == 100 and "[moAllowManualCollapseAndExpand,moAlwaysHideChildren]" or "[moHideChildren]") or nil
+	end
+end
+
+-- 停止计时器
+stopMonitoring()
+-- 导出前准备工作：设置不保存记录，设置记录选项，将DEBUG_MODE设置为0
+setRecordsOptions(true)
+setRecordsDontSave(true)
+combineDescription(308, "0")
+
+-- 导出表格
+local fileName = AddressList.getMemoryRecordByID(100).Description .. ".CT"
+saveTable(fileName)
+prints("已保存为: " .. fileName)
+
+-- 导出后恢复工作：将DEBUG_MODE设置为2，恢复记录选项，恢复保存记录
+setRecordsOptions(false)
+setRecordsDontSave(false)
+combineDescription(308, "2")
+{$asm}
+
+[DISABLE]

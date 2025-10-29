@@ -1,0 +1,22 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+-- getMainForm() -- 主界面
+-- getMemoryViewForm() -- 内存界面
+
+-- getMainForm().CommentButton.doClick() -- CE右下角附加注释按钮
+-- GetLuaEngine().MenuItem5.doClick() -- LUA调试窗口清屏
+-- getMemoryViewForm().miLuaEngine.doClick()
+-- getMainForm().Width = 900 -- 设置CE窗口宽度
+-- getMainForm().Height = getWorkAreaHeight()-100
+-- getMainForm().Top = 10
+-- getMainForm().Left = getWorkAreaWidth()-930
+-- getMainForm().btnMemoryView.doClick()  -- 模拟点击内存查看按钮
+-- getMemoryViewForm().miUserdefinedSymbols.doClick() -- 用户自定义的符号表
+
+getLuaEngine().show()
+{$asm}
+
+[DISABLE]
+{$lua}
+if not syntaxcheck then getLuaEngine().hide() end

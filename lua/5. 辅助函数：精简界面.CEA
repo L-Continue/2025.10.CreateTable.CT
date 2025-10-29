@@ -1,0 +1,14 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if Global.menuExists then Global.compactEnabled = true Global.compactMenu.Caption = "完整界面" end
+control_setVisible(wincontrol_getControl(MainForm, 0), false)
+control_setVisible(wincontrol_getControl(MainForm, 3), false)
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if Global.menuExists then Global.compactEnabled = false Global.compactMenu.Caption = "紧凑界面" end
+control_setVisible(wincontrol_getControl(MainForm, 0), true)
+control_setVisible(wincontrol_getControl(MainForm, 3), true)

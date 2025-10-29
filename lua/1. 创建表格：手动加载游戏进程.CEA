@@ -1,0 +1,80 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not Userdata then Userdata = {} end
+Userdata.ids = {901, 902, 903, 904, 905, 906, 907, 908, 909}
+if AddressList.Count > #Userdata.ids then return end
+
+local line = string.rep("· ", 150)
+local records = {
+	{Color = 0xDDDDDD, Description = line, ID = 1},
+	{Color = 0x808080, Description = "填写游戏名称等相关信息", ID = 100},
+	{Color = 0x0000FF, Description = "设置说明", Type = 11, Script = 909},
+	{Color = 0x808080, Description = "游戏信息", ID = 200, ParentID = 100},
+	{Color = 0x808080, Description = "中文名称: "},
+	{Color = 0x808080, Description = "英文名称: "},
+	{Color = 0x808080, Description = "平台名称: "},
+	{Color = 0x808080, Description = "最新版本: "},
+	{Color = 0x808080, Description = "脚本设置", ID = 300, ParentID = 100},
+	{Color = 0x808080, Description = "程序文件: "},
+	{Color = 0x808080, Description = "激活记录: "},
+	{Color = 0x808080, Description = "计时间隔: "},
+	{Color = 0x808080, Description = "核心模块: "},
+	{Color = 0x808080, Description = "稳定时长: "},
+	{Color = 0x808080, Description = "自动加载: "},
+	{Color = 0x808080, Description = "退出监测: "},
+	{Color = 0x808080, Description = "调试模式: "},
+	{Color = 0xDDDDDD, Description = line, ID = 2},
+	{Color = 0x303030, Description = "游戏状态", ID = 400},
+	{Color = 0x303030, Description = "更多功能", ID = 500, Rename = true},
+	{Color = 0x303030, Description = "重新加载", Type = 11, CopyName = true, Script = 904},
+	{Color = 0x303030, Description = "精简界面", Type = 11, CopyName = true, Script = 905},
+	{Color = 0x303030, Description = "显示RID", Type = 11, CopyName = true, Script = 906},
+	{Color = 0x303030, Description = "显示子项", Type = 11, CopyName = true, Script = 907},
+	{Color = 0x303030, Description = "模块信息", Type = 11, CopyName = true, Script = 908},
+	{Color = 0xDDDDDD, Description = line, ID = 3},
+}
+
+local childDescriptions,thisID,parentID = {},0,0
+-- 收集需要复制的描述
+for _, data in ipairs(records) do
+	if data.CopyName then table.insert(childDescriptions, data.Description) end
+end
+-- 生成子描述文本
+local childDescriptionText = string.format("[ %s ]", table.concat(childDescriptions, " | "))
+-- 创建内存记录
+Userdata.createRecords = {}
+for i, data in ipairs(records) do
+	if data.ID then thisID,parentID = data.ID,data.ID end
+
+	local record = AddressList.createMemoryRecord()
+	record.ID = data.ID or thisID
+	record.Type = data.Type
+	record.Color = data.Color
+	record.Description = data.Description
+	record.IsGroupHeader = not data.Type
+
+	local parent = data.ParentID or parentID
+	record.Parent = AddressList.getMemoryRecordByID(parent)
+
+	if data.Script then
+		local assembler = AddressList.getMemoryRecordByID(data.Script)
+		record.Script = assembler and assembler.Script or (type(data.Script) == "string" and data.Script)
+	end
+
+	if data.Rename then
+		record.Description = childDescriptionText
+	end
+
+	Userdata.createRecords[i] = record
+	thisID = thisID + 1
+end
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+stopMonitoring()
+-- 从最大索引反向遍历到 0，覆盖两个原循环的所有范围
+for i = AddressList.Count-1, #Userdata.ids, -1 do AddressList.getMemoryRecord(i).destroy() end
+{$asm}

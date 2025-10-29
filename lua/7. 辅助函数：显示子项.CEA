@@ -1,0 +1,22 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not RecordOptions then RecordOptions = {} end
+
+function toggleSubItemDisplay(enable)
+	for i = 0, AddressList.Count-1 do
+		local record = AddressList.getMemoryRecord(i)
+		RecordOptions[record.ID] = RecordOptions[record.ID] or record.Options
+		record.Options = enable and "" or RecordOptions[record.ID]
+	end
+
+	local statusText = enable and "显示" or "隐藏"
+	prints("设置子项显示: " .. statusText)
+end
+toggleSubItemDisplay(true)
+{$asm}
+
+[DISABLE]
+{$lua}
+if not syntaxcheck then toggleSubItemDisplay(false) end
+{$asm}

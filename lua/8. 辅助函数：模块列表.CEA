@@ -1,0 +1,366 @@
+[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if not Userdata then Userdata = {} end
+if not Userdata.moduleList then Userdata.moduleList = createForm(false) end
+-- 大小格式化
+function formatBytes(bytes)
+	local units = {"B", "KB", "MB", "GB", "TB"}
+	local unitIndex = 1
+	while bytes >= 1024 and unitIndex < #units do
+		bytes = bytes / 1024
+		unitIndex = unitIndex + 1
+	end
+	return string.format(unitIndex > 1 and "%.2f %s" or "%.0f %s", bytes, units[unitIndex])
+end
+
+-- 列出所有模块信息
+function listAllModules()
+	local pid = getOpenedProcessID()
+	if pid == 0 then prints("未打开任何进程") return end
+
+	local processName = getProcesslist()[pid]
+	local modules = enumModules(pid)
+	if not modules or #modules == 0 then prints("未找到任何模块") return end
+
+	prints("模块列表 (进程: " .. processName .. "):")
+	prints("序号 - 模块名 (大小) - 基地址")
+	prints("--------------------------------------------------------------")
+	local totalSize = 0
+	local largestModule = {index = 0, name = "未知", size = 0}
+	for i, module in ipairs(modules) do
+		local name = module.Name or "未知"
+		local size = module.Size or 0
+		local address = module.Address or 0
+		-- 格式化输出
+		local sizeStr = formatBytes(size)
+		local addressStr = string.format("0x%X", address)
+		prints(string.format("%03d - %s (%s) - %s", i, name, sizeStr, addressStr))
+		-- 更新总大小和最大模块
+		totalSize = totalSize + size
+		if size > largestModule.size then largestModule = {index = i, name = name, size = size} end
+	end
+	prints("--------------------------------------------------------------")
+	prints("总共 %d 个模块，总大小: %s", #modules, formatBytes(totalSize))
+	prints("最大模块: %s (大小: %s)", largestModule.name, formatBytes(largestModule.size))
+end
+
+-- 更详细的模块信息函数
+function detailedModuleInfo()
+    local pid = getOpenedProcessID()
+    if pid == 0 then return {} end
+
+    local processName = getProcesslist()[pid]
+    local modules = enumModules(pid)
+    local moduleInfo = {}
+
+    for i, module in ipairs(modules) do
+        local path = module.PathToFile or ""
+        local directory = extractFilePath(path)
+
+        table.insert(moduleInfo, {
+            index = i,
+            name = module.Name or "未知",
+            path = path,
+            directory = directory,
+            size = module.Size or 0,
+            address = module.Address or 0,
+            sizeFormatted = formatBytes(module.Size or 0)
+        })
+    end
+    return moduleInfo
+end
+
+
+-- 显示模块信息的GUI版本
+function showModulesInGUI()
+    local moduleInfo = detailedModuleInfo()
+    if #moduleInfo == 0 then showMessage("未找到任何模块") return end
+
+    -- 创建窗体显示模块信息
+    local form = Userdata.moduleList
+    if form.Created and not form.Visible then form.show() return end
+    if not form.customPosition then
+        form.customPosition = true
+        form.Width = 900
+        form.Height = getWorkAreaHeight()-100
+        form.Left = 10
+        form.Top = 10
+    end
+    form.Caption = "模块列表 - " .. tostring(getProcesslist()[getOpenedProcessID()] or "未知进程")
+    form.BorderIcons = "[biSystemMenu,biMinimize,biMaximize]"
+    form.BorderStyle = bsSizeable
+    form.OnClose = function()
+        local record = nil
+        record = AddressList.getMemoryRecordByID(908)
+        if record then record.Active = false end
+        record = AddressList.getMemoryRecordByID(505)
+        if record then record.Active = false end
+        form.Visible = false
+    end
+    form.show()
+
+    -- 创建主面板
+    local mainPanel = createPanel(form)
+    mainPanel.Align = alClient
+    mainPanel.BevelOuter = bvNone
+
+    -- 创建列表视图
+    local listview = createListView(mainPanel)
+    listview.Align = alClient
+    listview.ViewStyle = vsReport
+    listview.ReadOnly = true
+    listview.RowSelect = true
+    listview.GridLines = true
+
+    -- 添加列（新布局：序号、模块名、所在目录、大小、基地址）
+    listview.Columns.add()
+    listview.Columns[0].Caption = "序号"
+    listview.Columns[0].Width = 60
+
+    listview.Columns.add()
+    listview.Columns[1].Caption = "模块名"
+    listview.Columns[1].Width = 200
+
+    listview.Columns.add()
+    listview.Columns[2].Caption = "所在目录"
+    listview.Columns[2].Width = 300
+
+    listview.Columns.add()
+    listview.Columns[3].Caption = "大小"
+    listview.Columns[3].Width = 120
+    listview.Columns[3].Alignment = 1
+
+    listview.Columns.add()
+    listview.Columns[4].Caption = "基地址"
+    listview.Columns[4].Width = 180
+
+
+    -- 重新获取包含路径信息的模块数据
+    moduleInfo = detailedModuleInfo()
+
+    -- 添加数据
+    for i, info in ipairs(moduleInfo) do
+        local item = listview.Items.add()
+        item.Caption = tostring(info.index)
+        item.SubItems.add(info.name)
+        item.SubItems.add(info.directory)
+        item.SubItems.add(info.sizeFormatted)
+        item.SubItems.add(string.format("0x%X", info.address))
+    end
+
+    -- 右键菜单功能
+    local menuItems = {
+        {caption = "复制模块名称", colIndex = 0},
+        {caption = "复制目录路径", colIndex = 1},
+    }
+    listview.PopupMenu = createPopupMenu(listview)
+    for _, item in ipairs(menuItems) do
+        local menuItem = createMenuItem(listview.PopupMenu)
+        menuItem.Caption = item.caption
+        menuItem.OnClick = function()
+            if not listview.Selected then return end
+            local copyItem = listview.Selected.SubItems[item.colIndex]
+            writeToClipboard(copyItem)
+            showMessage("已" .. item.caption .. ": " .. copyItem)
+        end
+        listview.PopupMenu.Items.add(menuItem)
+    end
+
+    -- 双击复制模块名称
+    listview.OnDblClick = function(sender)
+        if listview.Selected then
+            local moduleName = listview.Selected.SubItems[0]
+            writeToClipboard(moduleName)
+            showMessage("已复制模块名称: " .. moduleName)
+        end
+    end
+
+    -- 创建底部面板
+    local bottomPanel = createPanel(mainPanel)
+    bottomPanel.Align = alBottom
+    bottomPanel.Height = 52
+    bottomPanel.BevelOuter = bvNone
+
+    -- 计算总大小
+    local totalSize = 0
+    for _, info in ipairs(moduleInfo) do totalSize = totalSize + info.size end
+
+    -- 统计信息标签
+    local statLabel = createLabel(bottomPanel)
+    statLabel.Caption = string.format("总计: %d 个模块, 总大小: %s", #moduleInfo, formatBytes(totalSize))
+    statLabel.Align = alNone
+    statLabel.Width = 300
+    statLabel.Layout = tlCenter
+    statLabel.Top = 10
+    statLabel.Left = 10
+
+    -- 按钮面板
+    local buttonPanel = createPanel(bottomPanel)
+    buttonPanel.Align = alRight
+    buttonPanel.Width = 335
+    buttonPanel.BevelOuter = bvNone
+
+    -- 控制台显示按钮
+    local consoleBtn = createButton(buttonPanel)
+    consoleBtn.Caption = "控制台输出"
+    consoleBtn.Left = 10
+    consoleBtn.Top = 8
+    consoleBtn.Width = 120
+    consoleBtn.Height = 34
+    consoleBtn.OnClick = listAllModules
+
+    -- 刷新按钮
+    local refreshBtn = createButton(buttonPanel)
+    refreshBtn.Caption = "刷新"
+    refreshBtn.Left = 135
+    refreshBtn.Top = 8
+    refreshBtn.Width = 90
+    refreshBtn.Height = 34
+    refreshBtn.OnClick = function()
+        -- 刷新数据
+        local newModuleInfo = detailedModuleInfo()
+        -- 清空列表
+        listview.Items.clear()
+        -- 重新填充数据
+        for i, info in ipairs(newModuleInfo) do
+            local item = listview.Items.add()
+            item.Caption = tostring(info.index)
+            item.SubItems.add(info.name)
+            item.SubItems.add(info.directory)
+            item.SubItems.add(info.sizeFormatted)
+            item.SubItems.add(string.format("0x%X", info.address))
+        end
+        -- 更新统计信息
+        local newTotalSize = 0
+        for _, info in ipairs(newModuleInfo) do newTotalSize = newTotalSize + info.size end
+        statLabel.Caption = string.format("总计: %d 个模块, 总大小: %s", #newModuleInfo, formatBytes(newTotalSize))
+        moduleInfo = newModuleInfo
+    end
+
+    -- 关闭按钮
+    local closeBtn = createButton(buttonPanel)
+    closeBtn.Caption = "关闭"
+    closeBtn.Left = 230
+    closeBtn.Top = 8
+    closeBtn.Width = 90
+    closeBtn.Height = 34
+    closeBtn.OnClick = function() form.close() end
+
+    -- 添加排序功能
+    local lastSortedColumn = -1
+    local ascending = true
+    listview.OnColumnClick = function(sender, column)
+        local colIndex = column.Index
+        -- 切换排序方向
+        if lastSortedColumn == colIndex then
+            ascending = not ascending
+        else
+            ascending = true
+            lastSortedColumn = colIndex
+        end
+
+        -- 根据列索引排序
+        table.sort(moduleInfo, function(a, b)
+            local valA, valB
+
+            if colIndex == 0 then
+                -- 序号列
+                valA = a.index
+                valB = b.index
+            elseif colIndex == 1 then
+                -- 模块名列
+                valA = a.name:lower()
+                valB = b.name:lower()
+            elseif colIndex == 2 then
+                -- 目录列
+                valA = a.directory:lower()
+                valB = b.directory:lower()
+            elseif colIndex == 3 then
+                -- 大小列 - 使用原始字节数进行排序
+                valA = a.size
+                valB = b.size
+            elseif colIndex == 4 then
+                -- 基地址列
+                valA = a.address
+                valB = b.address
+            else
+                return ascending
+            end
+
+            if ascending then
+                if type(valA) == "string" then
+                    return valA < valB
+                else
+                    return valA < valB
+                end
+            else
+                if type(valA) == "string" then
+                    return valA > valB
+                else
+                    return valA > valB
+                end
+            end
+        end)
+
+        -- 更新列表显示
+        listview.Items.clear()
+        for i, info in ipairs(moduleInfo) do
+            local item = listview.Items.add()
+            item.Caption = tostring(info.index)
+            item.SubItems.add(info.name)
+            item.SubItems.add(info.directory)
+            item.SubItems.add(info.sizeFormatted)
+            item.SubItems.add(string.format("0x%X", info.address))
+        end
+
+        -- 更新列标题显示排序状态
+        for i = 0, listview.Columns.Count - 1 do
+            if i == colIndex then
+                listview.Columns[i].Caption = listview.Columns[i].Caption:gsub(" ↑$", ""):gsub(" ↓$", "")
+                listview.Columns[i].Caption = listview.Columns[i].Caption .. (ascending and " ↑" or " ↓")
+            else
+                listview.Columns[i].Caption = listview.Columns[i].Caption:gsub(" ↑$", ""):gsub(" ↓$", "")
+            end
+        end
+    end
+    form.Created = true
+end
+
+
+-- 在控制台打印特定模块信息（如midimap.dll）
+function findSpecificModule(moduleName)
+	local pid = getOpenedProcessID()
+	if pid == 0 then prints("未打开任何进程") return nil end
+
+	local processName = getProcesslist()[pid]
+	local modules = enumModules(pid)
+	moduleName = moduleName:lower()
+
+	for _, module in ipairs(modules) do
+		local currentName = module.Name:lower()
+		if currentName == moduleName then
+			prints("找到模块: " .. module.Name)
+			prints("大小: " .. module.Size .. " 字节 (" .. math.floor(module.Size / 1024) .. " KB)")
+			prints("基地址: 0x" .. string.format("%X", module.Address))
+			return module
+		end
+	end
+
+	prints("未找到模块: " .. moduleName)
+	return nil
+end
+
+-- 使用示例
+-- listAllModules()  -- 在控制台列出所有模块
+-- showModulesInGUI() -- 在GUI中显示模块信息
+-- findSpecificModule("midimap.dll") -- 查找特定模块
+
+showModulesInGUI()
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if Userdata and Userdata.moduleList then Userdata.moduleList.Visible = false end
+{$asm}
